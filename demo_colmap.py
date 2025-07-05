@@ -94,6 +94,8 @@ def demo_fn(args):
     # Print configuration
     print("Arguments:", vars(args))
 
+    import ipdb; ipdb.set_trace()
+
     # Set seed for reproducibility
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)

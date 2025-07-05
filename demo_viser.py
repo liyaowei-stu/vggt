@@ -9,6 +9,9 @@ import glob
 import time
 import threading
 import argparse
+import datetime
+
+
 from typing import List, Optional
 
 import numpy as np
@@ -17,7 +20,6 @@ from tqdm.auto import tqdm
 import viser
 import viser.transforms as viser_tf
 import cv2
-
 
 try:
     import onnxruntime
@@ -31,14 +33,39 @@ from vggt.utils.geometry import closed_form_inverse_se3, unproject_depth_map_to_
 from vggt.utils.pose_enc import pose_encoding_to_extri_intri
 
 
+def save_points_dict(output_dir, points, colors, points_conf):
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = os.path.join(output_dir, f"point_cloud_{timestamp}.npz")
+    
+    # Convert tensors to numpy arrays before saving
+    if isinstance(points, torch.Tensor):
+        points_dict_np = {
+            "verts": points.float().detach().cpu().numpy(),
+            "rgb": colors.float().detach().cpu().numpy().astype(np.uint8),
+            "conf": points_conf.float().detach().cpu().numpy()
+        }
+    else:
+        points_dict_np = {
+            "verts": points,
+            "rgb": colors,
+            "conf": points_conf
+        }
+    
+    np.savez(output_path, **points_dict_np)
+
+
+
 def viser_wrapper(
     pred_dict: dict,
     port: int = 8080,
-    init_conf_threshold: float = 50.0,  # represents percentage (e.g., 50 means filter lowest 50%)
+    init_conf_threshold: float = 1.0,  # represents percentage (e.g., 50 means filter lowest 50%)
     use_point_map: bool = False,
     background_mode: bool = False,
     mask_sky: bool = False,
     image_folder: str = None,
+    max_points: int = 1000000,
+    point_size: float = 0.001,
 ):
     """
     Visualize predicted 3D points and camera poses with viser.
@@ -60,6 +87,8 @@ def viser_wrapper(
         background_mode (bool): Whether to run the server in background thread.
         mask_sky (bool): Whether to apply sky segmentation to filter out sky points.
         image_folder (str): Path to the folder containing input images.
+        max_points (int): Maximum number of points to display for performance.
+        point_size (float): Point size in visualization.
     """
     print(f"Starting viser server on port {port}")
 
@@ -76,6 +105,10 @@ def viser_wrapper(
 
     extrinsics_cam = pred_dict["extrinsic"]  # (S, 3, 4)
     intrinsics_cam = pred_dict["intrinsic"]  # (S, 3, 3)
+
+    import ipdb; ipdb.set_trace()
+    # output_dir = "output"
+    # save_points_dict(output_dir, points, colors_flat, conf_flat)
 
     # Compute world points from depth if not using the precomputed point map
     if not use_point_map:
@@ -99,7 +132,28 @@ def viser_wrapper(
     colors_flat = (colors.reshape(-1, 3) * 255).astype(np.uint8)
     conf_flat = conf.reshape(-1)
 
-    cam_to_world_mat = closed_form_inverse_se3(extrinsics_cam)  # shape (S, 4, 4) typically
+    # 性能优化：预计算百分位数缓存
+    print("Precomputing confidence percentiles for performance...")
+    percentiles = np.linspace(0, 100, 1001)  # 0到100，步长0.1
+    percentile_values = np.percentile(conf_flat, percentiles)
+
+    # import ipdb; ipdb.set_trace()
+    
+    # 性能优化：点云下采样
+    if len(points) > max_points:
+        print(f"Downsampling points from {len(points)} to {max_points} for performance")
+        # 基于置信度进行下采样，保留高置信度点
+        sorted_indices = np.argsort(conf_flat)[::-1]  # 按置信度降序排列
+        selected_indices = sorted_indices[:max_points]
+        points = points[selected_indices]
+        colors_flat = colors_flat[selected_indices]
+        conf_flat = conf_flat[selected_indices]
+        frame_indices = np.repeat(np.arange(S), H * W)[selected_indices]
+    else:
+        # Store frame indices so we can filter by frame
+        frame_indices = np.repeat(np.arange(S), H * W)
+
+    cam_to_world_mat = closed_form_inverse_se3(extrinsics_cam)  # shape (S, 4, 4) typically, convert w2c into c2w
     # For convenience, we store only (3,4) portion
     cam_to_world = cam_to_world_mat[:, :3, :]
 
@@ -107,9 +161,6 @@ def viser_wrapper(
     scene_center = np.mean(points, axis=0)
     points_centered = points - scene_center
     cam_to_world[..., -1] -= scene_center
-
-    # Store frame indices so we can filter by frame
-    frame_indices = np.repeat(np.arange(S), H * W)
 
     # Build the viser GUI
     gui_show_frames = server.gui.add_checkbox("Show Cameras", initial_value=True)
@@ -123,17 +174,24 @@ def viser_wrapper(
         "Show Points from Frames", options=["All"] + [str(i) for i in range(S)], initial_value="All"
     )
 
+    # 性能优化：添加点云控制选项
+    gui_point_size = server.gui.add_slider(
+        "Point Size", min=0.0001, max=0.01, step=0.0001, initial_value=point_size
+    )
+
     # Create the main point cloud handle
     # Compute the threshold value as the given percentile
     init_threshold_val = np.percentile(conf_flat, init_conf_threshold)
     init_conf_mask = (conf_flat >= init_threshold_val) & (conf_flat > 0.1)
+
     point_cloud = server.scene.add_point_cloud(
         name="viser_pcd",
         points=points_centered[init_conf_mask],
         colors=colors_flat[init_conf_mask],
-        point_size=0.001,
-        point_shape="circle",
+        point_size=point_size,
+        point_shape="diamond",
     )
+    # ['square', 'diamond', 'circle', 'rounded', 'sparkle']
 
     # We will store references to frames & frustums so we can toggle visibility
     frames: List[viser.FrameHandle] = []
@@ -196,13 +254,17 @@ def viser_wrapper(
             frustums.append(frustum_cam)
             attach_callback(frustum_cam, frame_axis)
 
+    
     def update_point_cloud() -> None:
-        """Update the point cloud based on current GUI selections."""
-        # Here we compute the threshold value based on the current percentage
+        """Actual point cloud update function."""
+        # 使用预计算的百分位数值
         current_percentage = gui_points_conf.value
-        threshold_val = np.percentile(conf_flat, current_percentage)
+        # 找到最接近的百分位数值
+        idx = int(current_percentage * 10)  # 0.1步长，所以乘以10
+        idx = min(idx, len(percentile_values) - 1)
+        threshold_val = percentile_values[idx]
 
-        print(f"Threshold absolute value: {threshold_val}, percentage: {current_percentage}%")
+        print(f"Threshold absolute value: {threshold_val:.4f}, percentage: {current_percentage}%")
 
         conf_mask = (conf_flat >= threshold_val) & (conf_flat > 1e-5)
 
@@ -223,6 +285,11 @@ def viser_wrapper(
     @gui_frame_selector.on_update
     def _(_) -> None:
         update_point_cloud()
+
+    @gui_point_size.on_update
+    def _(_) -> None:
+        """Update point size."""
+        point_cloud.point_size = gui_point_size.value
 
     @gui_show_frames.on_update
     def _(_) -> None:
@@ -311,11 +378,14 @@ parser.add_argument(
 )
 parser.add_argument("--use_point_map", action="store_true", help="Use point map instead of depth-based points")
 parser.add_argument("--background_mode", action="store_true", help="Run the viser server in background mode")
-parser.add_argument("--port", type=int, default=8080, help="Port number for the viser server")
+parser.add_argument("--port", type=int, default=12345, help="Port number for the viser server")
 parser.add_argument(
     "--conf_threshold", type=float, default=25.0, help="Initial percentage of low-confidence points to filter out"
 )
 parser.add_argument("--mask_sky", action="store_true", help="Apply sky segmentation to filter out sky points")
+parser.add_argument("--max_points", type=int, default=1000000, help="Maximum number of points to display (for performance)")
+parser.add_argument("--point_size", type=float, default=0.001, help="Point size in visualization")
+
 
 
 def main():
@@ -394,6 +464,8 @@ def main():
         background_mode=args.background_mode,
         mask_sky=args.mask_sky,
         image_folder=args.image_folder,
+        max_points=args.max_points,
+        point_size=args.point_size,
     )
     print("Visualization complete")
 

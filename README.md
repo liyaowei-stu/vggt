@@ -8,11 +8,10 @@
 <a href="https://vgg-t.github.io/"><img src="https://img.shields.io/badge/Project_Page-green" alt="Project Page"></a>
 <a href='https://huggingface.co/spaces/facebook/vggt'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Demo-blue'></a>
 
-
 **[Visual Geometry Group, University of Oxford](https://www.robots.ox.ac.uk/~vgg/)**; **[Meta AI](https://ai.facebook.com/research/)**
 
-
 [Jianyuan Wang](https://jytime.github.io/), [Minghao Chen](https://silent-chen.github.io/), [Nikita Karaev](https://nikitakaraevv.github.io/), [Andrea Vedaldi](https://www.robots.ox.ac.uk/~vedaldi/), [Christian Rupprecht](https://chrirupp.github.io/), [David Novotny](https://d-novotny.github.io/)
+
 </div>
 
 ```bibtex
@@ -25,22 +24,18 @@
 ```
 
 ## Updates
+
 - [June 2, 2025] Added a script to run VGGT and save predictions in COLMAP format, with bundle adjustment support optional. The saved COLMAP files can be directly used with [gsplat](https://github.com/nerfstudio-project/gsplat) or other NeRF/Gaussian splatting libraries.
-
-
-- [May 3, 2025] Evaluation code for reproducing our camera pose estimation results on Co3D is now available in the [evaluation](https://github.com/facebookresearch/vggt/tree/evaluation) branch. 
-
-
+- [May 3, 2025] Evaluation code for reproducing our camera pose estimation results on Co3D is now available in the [evaluation](https://github.com/facebookresearch/vggt/tree/evaluation) branch.
 - [Apr 13, 2025] Training code is being gradually cleaned and uploaded to the [training](https://github.com/facebookresearch/vggt/tree/training) branch. It will be merged into the main branch once finalized.
 
 ## Overview
 
 Visual Geometry Grounded Transformer (VGGT, CVPR 2025) is a feed-forward neural network that directly infers all key 3D attributes of a scene, including extrinsic and intrinsic camera parameters, point maps, depth maps, and 3D point tracks, **from one, a few, or hundreds of its views, within seconds**.
 
-
 ## Quick Start
 
-First, clone this repository to your local machine, and install the dependencies (torch, torchvision, numpy, Pillow, and huggingface_hub). 
+First, clone this repository to your local machine, and install the dependencies (torch, torchvision, numpy, Pillow, and huggingface_hub).
 
 ```bash
 git clone git@github.com:facebookresearch/vggt.git 
@@ -48,8 +43,7 @@ cd vggt
 pip install -r requirements.txt
 ```
 
-Alternatively, you can install VGGT as a package (<a href="docs/package.md">click here</a> for details).
-
+Alternatively, you can install VGGT as a package (`<a href="docs/package.md">`click here`</a>` for details).
 
 Now, try the model with just a few lines of code:
 
@@ -99,7 +93,7 @@ with torch.no_grad():
     with torch.cuda.amp.autocast(dtype=dtype):
         images = images[None]  # add batch dimension
         aggregated_tokens_list, ps_idx = model.aggregator(images)
-                
+              
     # Predict Cameras
     pose_enc = model.camera_head(aggregated_tokens_list)[-1]
     # Extrinsic and intrinsic matrices, following OpenCV convention (camera from world)
@@ -110,7 +104,7 @@ with torch.no_grad():
 
     # Predict Point Maps
     point_map, point_conf = model.point_head(aggregated_tokens_list, images, ps_idx)
-        
+      
     # Construct 3D Points from Depth Maps and Cameras
     # which usually leads to more accurate 3D points than point map branch
     point_map_by_unprojection = unproject_depth_map_to_point_map(depth_map.squeeze(0), 
@@ -124,11 +118,9 @@ with torch.no_grad():
     track_list, vis_score, conf_score = model.track_head(aggregated_tokens_list, images, ps_idx, query_points=query_points[None])
 ```
 
-
 Furthermore, if certain pixels in the input frames are unwanted (e.g., reflective surfaces, sky, or water), you can simply mask them by setting the corresponding pixel values to 0 or 1. Precise segmentation masks aren't necessary - simple bounding box masks work effectively (check this [issue](https://github.com/facebookresearch/vggt/issues/47) for an example).
 
 </details>
-
 
 ## Interactive Demo
 
@@ -142,11 +134,9 @@ pip install -r requirements_demo.txt
 
 **Please note:** VGGT typically reconstructs a scene in less than 1 second. However, visualizing 3D points may take tens of seconds due to third-party rendering, independent of VGGT's processing time. The visualization is slow especially when the number of images is large.
 
-
 #### Gradio Web Interface
 
 Our Gradio-based interface allows you to upload images/videos, run reconstruction, and interactively explore the 3D scene in your browser. You can launch this in your local machine or try it on [Hugging Face](https://huggingface.co/spaces/facebook/vggt).
-
 
 ```bash
 python demo_gradio.py
@@ -156,8 +146,8 @@ python demo_gradio.py
 <summary>Click to preview the Gradio interactive interface</summary>
 
 ![Gradio Web Interface Preview](https://jytime.github.io/data/vggt_hf_demo_screen.png)
-</details>
 
+</details>
 
 #### Viser 3D Viewer
 
@@ -171,7 +161,7 @@ python demo_viser.py --image_folder path/to/your/images/folder
 
 We also support exporting VGGT's predictions directly to COLMAP format, by:
 
-```bash 
+```bash
 # Feedforward prediction only
 python demo_colmap.py --scene_dir=/YOUR/SCENE_DIR/ 
 
@@ -180,11 +170,11 @@ python demo_colmap.py --scene_dir=/YOUR/SCENE_DIR/ --use_ba
 # check the file for additional bundle adjustment configuration options
 ```
 
-Please ensure that the images are stored in `/YOUR/SCENE_DIR/images/`. This folder should contain only the images. Check the examples folder for the desired data structure. 
+Please ensure that the images are stored in `/YOUR/SCENE_DIR/images/`. This folder should contain only the images. Check the examples folder for the desired data structure.
 
-The reconstruction result (camera parameters and 3D points) will be automatically saved under `/YOUR/SCENE_DIR/sparse/` in the COLMAP format, such as:
+* The reconstruction result (camera parameters and 3D points) will be automatically saved under `/YOUR/SCENE_DIR/sparse/` in the COLMAP format, such as:
 
-``` 
+```
 SCENE_DIR/
 ├── images/
 └── sparse/
@@ -195,42 +185,35 @@ SCENE_DIR/
 
 ## Integration with Gaussian Splatting
 
-
 The exported COLMAP files can be directly used with [gsplat](https://github.com/nerfstudio-project/gsplat) for Gaussian Splatting training. Install `gsplat` following their official instructions (we recommend `gsplat==1.3.0`):
 
 An example command to train the model is:
+
 ```
 cd gsplat
 python examples/simple_trainer.py  default --data_factor 1 --data_dir /YOUR/SCENE_DIR/ --result_dir /YOUR/RESULT_DIR/
 ```
 
-
-
 ## Zero-shot Single-view Reconstruction
 
 Our model shows surprisingly good performance on single-view reconstruction, although it was never trained for this task. The model does not need to duplicate the single-view image to a pair, instead, it can directly infer the 3D structure from the tokens of the single view image. Feel free to try it with our demos above, which naturally works for single-view reconstruction.
 
-
-We did not quantitatively test monocular depth estimation performance ourselves, but [@kabouzeid](https://github.com/kabouzeid) generously provided a comparison of VGGT to recent methods [here](https://github.com/facebookresearch/vggt/issues/36). VGGT shows competitive or better results compared to state-of-the-art monocular approaches such as DepthAnything v2 or MoGe, despite never being explicitly trained for single-view tasks. 
-
-
+We did not quantitatively test monocular depth estimation performance ourselves, but [@kabouzeid](https://github.com/kabouzeid) generously provided a comparison of VGGT to recent methods [here](https://github.com/facebookresearch/vggt/issues/36). VGGT shows competitive or better results compared to state-of-the-art monocular approaches such as DepthAnything v2 or MoGe, despite never being explicitly trained for single-view tasks.
 
 ## Runtime and GPU Memory
 
-We benchmark the runtime and GPU memory usage of VGGT's aggregator on a single NVIDIA H100 GPU across various input sizes. 
+We benchmark the runtime and GPU memory usage of VGGT's aggregator on a single NVIDIA H100 GPU across various input sizes.
 
-| **Input Frames** | 1 | 2 | 4 | 8 | 10 | 20 | 50 | 100 | 200 |
-|:----------------:|:-:|:-:|:-:|:-:|:--:|:--:|:--:|:---:|:---:|
-| **Time (s)**     | 0.04 | 0.05 | 0.07 | 0.11 | 0.14 | 0.31 | 1.04 | 3.12 | 8.75 |
-| **Memory (GB)**  | 1.88 | 2.07 | 2.45 | 3.23 | 3.63 | 5.58 | 11.41 | 21.15 | 40.63 |
+| **Input Frames** |  1  |  2  |  4  |  8  |  10  |  20  |  50  |  100  |  200  |
+| :--------------------: | :--: | :--: | :--: | :--: | :--: | :--: | :---: | :---: | :---: |
+|   **Time (s)**   | 0.04 | 0.05 | 0.07 | 0.11 | 0.14 | 0.31 | 1.04 | 3.12 | 8.75 |
+| **Memory (GB)** | 1.88 | 2.07 | 2.45 | 3.23 | 3.63 | 5.58 | 11.41 | 21.15 | 40.63 |
 
 Note that these results were obtained using Flash Attention 3, which is faster than the default Flash Attention 2 implementation while maintaining almost the same memory usage. Feel free to compile Flash Attention 3 from source to get better performance.
-
 
 ## Research Progression
 
 Our work builds upon a series of previous research projects. If you're interested in understanding how our research evolved, check out our previous works:
-
 
 <table border="0" cellspacing="0" cellpadding="0">
   <tr>
@@ -259,7 +242,6 @@ Our work builds upon a series of previous research projects. If you're intereste
   </tr>
 </table>
 
-
 ## Acknowledgements
 
 Thanks to these great repositories: [PoseDiffusion](https://github.com/facebookresearch/PoseDiffusion), [VGGSfM](https://github.com/facebookresearch/vggsfm), [CoTracker](https://github.com/facebookresearch/co-tracker), [DINOv2](https://github.com/facebookresearch/dinov2), [Dust3r](https://github.com/naver/dust3r), [Moge](https://github.com/microsoft/moge), [PyTorch3D](https://github.com/facebookresearch/pytorch3d), [Sky Segmentation](https://github.com/xiongzhu666/Sky-Segmentation-and-Post-processing), [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2), [Metric3D](https://github.com/YvanYin/Metric3D) and many other inspiring works in the community.
@@ -269,6 +251,6 @@ Thanks to these great repositories: [PoseDiffusion](https://github.com/facebookr
 - [ ] Release the training code
 - [ ] Release VGGT-500M and VGGT-200M
 
-
 ## License
+
 See the [LICENSE](./LICENSE.txt) file for details about the license under which this code is made available.
