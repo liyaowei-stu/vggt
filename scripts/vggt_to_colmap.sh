@@ -18,9 +18,9 @@ export NCCL_IB_GID_INDEX=3
 export NCCL_NET_GDR_LEVEL=3
 export NCCL_TOPO_FILE=/tmp/topo.txt
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
-python demo_colmap.py --scene_dir data/test_data_soldier
+python mv_custom/third_party/vggt/demo_colmap.py --scene_dir mv_custom/third_party/vggt/data/test_data_soldier/masked_images
 
 
 

@@ -33,18 +33,6 @@ from pytorch3d.renderer import (
 )
 
 
-def load_and_preprocess_mask(masks_path, shape):
-    masks = []
-    for mask_path in masks_path:
-        mask = Image.open(mask_path)
-        mask = mask.resize(shape, Image.NEAREST)
-        mask = np.array(mask)
-        masks.append(mask)
-    masks = np.stack(masks, axis=0)
-    return masks
-
-
-
 def np_depth_to_colormap(depth, min_conf=-0.9):
     """ depth: [H, W] """
     depth_normalized = np.zeros(depth.shape)
@@ -69,8 +57,7 @@ def run_vggt(images_path, masks_path, model):
     ## only save predictions, not to process the predictions
     images = load_and_preprocess_images(images_path, mode="pad").to(device)
 
-    masks = load_and_preprocess_mask(masks_path, images[0].shape[-2:])
-
+    masks = load_and_preprocess_images(masks_path, mode="pad", is_mask=True)[:,0,:,:]
 
     with torch.cuda.amp.autocast(dtype=dtype):
         images = images[None]  # add batch dimension
@@ -82,7 +69,10 @@ def run_vggt(images_path, masks_path, model):
         predictions["masks"] = masks
         for key in predictions.keys():
             if isinstance(predictions[key], torch.Tensor):
-                predictions[key] = predictions[key].cpu().numpy().squeeze(0)  # remove batch dimension and convert to numpy
+                if predictions[key].shape[0] == 1:
+                    predictions[key] = predictions[key].cpu().numpy().squeeze(0)  # remove batch dimension and convert to numpy
+                else:
+                    predictions[key] = predictions[key].cpu().numpy()  # remove batch dimension and convert to numpy
 
 
         # ### 1. process world points
@@ -140,21 +130,19 @@ def main(
     model, 
     ):
 
-    import ipdb; ipdb.set_trace()
 
     meta_info = json.load(open(args.meta_path))
     data_dir = args.data_dir
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
 
-
     for item in tqdm(meta_info):
         object_id = item["id"]
-        multiview_path = item["multiview_path"]
+        multiview_path = item["multiview_img_path"]
         video_path = item["video_path"]
 
-        for image_dir in multiview_path:
-            images_path = sorted(glob.glob(os.path.join(data_dir, image_dir, "masked_images", "**")))
+        for image_dir in tqdm(multiview_path):
+            images_path = sorted(glob.glob(os.path.join(data_dir, image_dir, "images", "**")))
             masks_path = sorted(glob.glob(os.path.join(data_dir, image_dir, "masks", "**")))
             predictions = run_vggt(images_path, masks_path, model)
 
@@ -162,18 +150,29 @@ def main(
             output_path = os.path.join(output_dir, object_id, scene_camera_name, "vggt_predictions.npz")
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             np.savez(output_path, **predictions)
-            break
 
-        for video_dir in video_path:
-            images_path = sorted(glob.glob(os.path.join(data_dir, video_dir, "masked_images", "**")))
+        for video_dir in tqdm(video_path):
+            images_path = sorted(glob.glob(os.path.join(data_dir, video_dir, "images", "**")))
             masks_path = sorted(glob.glob(os.path.join(data_dir, video_dir, "masks", "**")))
+            scene_camera_name = video_dir.split("/")[-1]
+            if len(images_path) > 200:
+                # Uniformly sample 200 frames from 0 to len(images_path)
+                indices = np.linspace(0, len(images_path) - 1, 200, dtype=int)
+
+                output_path = os.path.join(output_dir, object_id, scene_camera_name, "sampled_indices.txt")
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                with open(output_path, "w") as f:
+                    for i in indices:
+                        f.write(f"{os.path.basename(images_path[i]).split('.')[0]}\n") 
+
+                images_path = [images_path[i] for i in indices]
+                masks_path = [masks_path[i] for i in indices]
+
             predictions = run_vggt(images_path, masks_path, model)
 
-            scene_camera_name = video_dir.split("/")[-1]
             output_path = os.path.join(output_dir, object_id, scene_camera_name, "vggt_predictions.npz")
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             np.savez(output_path, **predictions)
-            break
 
     print("Process done!")
 

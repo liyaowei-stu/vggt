@@ -14,7 +14,7 @@ import ipdb; ipdb.set_trace()
 model = VGGT.from_pretrained("facebook/VGGT-1B").to(device)
 
 # Load and preprocess example images (replace with your own image paths)
-image_names = glob.glob("/group/40034/yaoweili/code/image_generation/ic_custom/vggt/examples/kitchen/images/*.png")
+image_names = glob.glob("examples/kitchen/images/*.png")
 images = load_and_preprocess_images(image_names).to(device)
 
 with torch.no_grad():

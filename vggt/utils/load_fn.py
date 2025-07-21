@@ -94,7 +94,7 @@ def load_and_preprocess_images_square(image_path_list, target_size=1024):
     return images, original_coords
 
 
-def load_and_preprocess_images(image_path_list, mode="crop"):
+def load_and_preprocess_images(image_path_list, mode="crop", is_mask=False):
     """
     A quick start function to load and preprocess images for model input.
     This assumes the images should have the same shape for easier batching, but our model can also work well with different shapes.
@@ -166,7 +166,11 @@ def load_and_preprocess_images(image_path_list, mode="crop"):
             new_height = round(height * (new_width / width) / 14) * 14
 
         # Resize with new dimensions (width, height)
-        img = img.resize((new_width, new_height), Image.Resampling.BICUBIC)
+        if is_mask:
+            img = img.resize((new_width, new_height), Image.Resampling.NEAREST)
+        else:
+            img = img.resize((new_width, new_height), Image.Resampling.BICUBIC)
+
         img = to_tensor(img)  # Convert to tensor (0, 1)
 
         # Center crop height if it's larger than 518 (only in crop mode)
@@ -187,7 +191,7 @@ def load_and_preprocess_images(image_path_list, mode="crop"):
 
                 # Pad with white (value=1.0)
                 img = torch.nn.functional.pad(
-                    img, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=1.0
+                    img, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=1.0 if not is_mask else 0.0
                 )
 
         shapes.add((img.shape[1], img.shape[2]))

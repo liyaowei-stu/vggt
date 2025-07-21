@@ -120,7 +120,7 @@ def demo_fn(args):
     print(f"Model loaded")
 
     # Get image paths and preprocess them
-    image_dir = os.path.join(args.scene_dir, "images")
+    image_dir = os.path.join(args.scene_dir)
     image_path_list = glob.glob(os.path.join(image_dir, "*"))
     if len(image_path_list) == 0:
         raise ValueError(f"No images found in {image_dir}")
@@ -131,6 +131,7 @@ def demo_fn(args):
     vggt_fixed_resolution = 518
     img_load_resolution = 1024
 
+    import ipdb; ipdb.set_trace()
     images, original_coords = load_and_preprocess_images_square(image_path_list, img_load_resolution)
     images = images.to(device)
     original_coords = original_coords.to(device)
