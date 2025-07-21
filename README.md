@@ -25,9 +25,16 @@
 
 ## Updates
 
+- [July 6, 2025] Training code is now available in the `training` folder, including an example to finetune VGGT on a custom dataset. 
+
+- [June 13, 2025] Honored to receive the Best Paper Award at CVPR 2025! Apologies if I’m slow to respond to queries or GitHub issues these days. If you’re interested, our oral presentation is available [here](https://docs.google.com/presentation/d/1JVuPnuZx6RgAy-U5Ezobg73XpBi7FrOh/edit?usp=sharing&ouid=107115712143490405606&rtpof=true&sd=true). Another long presentation can be found [here](https://docs.google.com/presentation/d/1aSv0e5PmH1mnwn2MowlJIajFUYZkjqgw/edit?usp=sharing&ouid=107115712143490405606&rtpof=true&sd=true) (Note: it’s shared in .pptx format with animations — quite large, but feel free to use it as a template if helpful.)
+
+
 - [June 2, 2025] Added a script to run VGGT and save predictions in COLMAP format, with bundle adjustment support optional. The saved COLMAP files can be directly used with [gsplat](https://github.com/nerfstudio-project/gsplat) or other NeRF/Gaussian splatting libraries.
-- [May 3, 2025] Evaluation code for reproducing our camera pose estimation results on Co3D is now available in the [evaluation](https://github.com/facebookresearch/vggt/tree/evaluation) branch.
-- [Apr 13, 2025] Training code is being gradually cleaned and uploaded to the [training](https://github.com/facebookresearch/vggt/tree/training) branch. It will be merged into the main branch once finalized.
+
+
+- [May 3, 2025] Evaluation code for reproducing our camera pose estimation results on Co3D is now available in the [evaluation](https://github.com/facebookresearch/vggt/tree/evaluation) branch. 
+
 
 ## Overview
 
@@ -167,7 +174,12 @@ python demo_colmap.py --scene_dir=/YOUR/SCENE_DIR/
 
 # With bundle adjustment
 python demo_colmap.py --scene_dir=/YOUR/SCENE_DIR/ --use_ba
-# check the file for additional bundle adjustment configuration options
+
+# Run with bundle adjustment using reduced parameters for faster processing
+# Reduces max_query_pts from 4096 (default) to 2048 and query_frame_num from 8 (default) to 5
+# Trade-off: Faster execution but potentially less robust reconstruction in complex scenes (you may consider setting query_frame_num equal to your total number of images) 
+# See demo_colmap.py for additional bundle adjustment configuration options
+python demo_colmap.py --scene_dir=/YOUR/SCENE_DIR/ --use_ba --max_query_pts=2048 --query_frame_num=5
 ```
 
 Please ensure that the images are stored in `/YOUR/SCENE_DIR/images/`. This folder should contain only the images. Check the examples folder for the desired data structure.
@@ -248,7 +260,7 @@ Thanks to these great repositories: [PoseDiffusion](https://github.com/facebookr
 
 ## Checklist
 
-- [ ] Release the training code
+- [x] Release the training code
 - [ ] Release VGGT-500M and VGGT-200M
 
 ## License
